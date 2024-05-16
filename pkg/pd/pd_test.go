@@ -476,8 +476,8 @@ func TestPD_GetUser_Integration(t *testing.T) {
 
 	assert.Equal(t, 200, rsp.StatusCode)
 	assert.Equal(t, true, rsp.Success)
-	assert.Equal(t, "ManuelReschke", rsp.Username)
-	assert.Equal(t, "Free", rsp.Subscription.Name)
+	assert.Equal(t, "sordidgoose", rsp.Username)
+	assert.Equal(t, "Pro", rsp.Subscription.Name)
 }
 
 // TestPD_GetUserFiles is a unit test for the GET "/user/files" method

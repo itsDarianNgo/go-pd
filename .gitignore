@@ -1,3 +1,5 @@
 .vscode
 c.out
 coverage.html
+.env
+.env_test
