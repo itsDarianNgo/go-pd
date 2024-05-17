@@ -40,3 +40,19 @@ T
 $pkg/pd/utils/directory_utils_test.go,2\6\265793b416ada3ebd25ca984045a2457359fc131
 I
 pkg/pd/utils/file_size.go,0\4\0496ad8935847ac522bd3387be66149bd2531576
+J
+pkg/pd/utils/hash_utils.go,f\8\f8de308538e30eba4cf52f6e46ffc906cbd94b46
+N
+pkg/pd/utils/calculate_hash.go,0\0\001b3b76758f776da88a6f31d2e70eeab6fb43b7
+O
+pkg/pd/utils/hash_calculator.go,3\b\3bdc6a6c44f86a93ab7d101cdc8e1529cbe62174
+D
+pkg/pd/utils/main.go,0\1\016ec9032750ede25c0fc62e44315570b7a6ebe7
+A
+calculate_hash.go,2\c\2ccf89d80a5e8af4481189db51c15c1203daabbb
+E
+pkg/calculate_hash.go,8\6\8658dfab295ff488528cac22f8baf9e97a044cc8
+8
+Makefile,8\3\836efb6e25a091dcb4ff8e1dbb2f0be6a5cbf14c
+A
+pkg/pd/hashes.csv,9\8\982d8be0fcf32d7aecb9f5f7afecb07f9be661cf

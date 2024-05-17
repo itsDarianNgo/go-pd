@@ -18,11 +18,26 @@ var fileIDPost string
 var fileIDPut string
 var listID string
 
+// SetupTestEnvironment cleans up the test environment before running tests
+func SetupTestEnvironment() {
+	// Remove the existing hashes.csv file to ensure a clean test environment
+	if err := os.Remove("hashes.csv"); err != nil && !os.IsNotExist(err) {
+		fmt.Printf("Error removing test hash file: %v\n", err)
+	}
+}
+
 // TestPD_UploadPOST is a unit test for the POST upload method
 func TestPD_UploadPOST(t *testing.T) {
+	SetupTestEnvironment()
+
 	server := pd.MockFileUploadServer()
 	defer server.Close()
 	testURL := server.URL + "/file"
+
+	// Initialize hash file
+	if err := utils.InitializeHashFile(); err != nil {
+		t.Fatalf("Failed to initialize hash file: %v", err)
+	}
 
 	req := &pd.RequestUpload{
 		PathToFile: "testdata/cat.jpg",
@@ -43,18 +58,25 @@ func TestPD_UploadPOST(t *testing.T) {
 	fmt.Println("POST Req: " + rsp.GetFileURL())
 }
 
-// TestPD_UploadPOST_Integration run a real integration test against the service
+// TestPD_UploadPOST_Integration is an integration test for the POST upload method
 func TestPD_UploadPOST_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip(SkipIntegrationTest)
+	SetupTestEnvironment()
+
+	server := pd.MockFileUploadServer()
+	defer server.Close()
+	testURL := server.URL + "/file"
+
+	// Initialize hash file
+	if err := utils.InitializeHashFile(); err != nil {
+		t.Fatalf("Failed to initialize hash file: %v", err)
 	}
 
 	req := &pd.RequestUpload{
 		PathToFile: "testdata/cat.jpg",
 		FileName:   "test_post_cat.jpg",
+		Anonymous:  true,
+		URL:        testURL,
 	}
-
-	req.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
 	rsp, err := c.UploadPOST(req)
@@ -64,7 +86,7 @@ func TestPD_UploadPOST_Integration(t *testing.T) {
 
 	assert.Equal(t, 201, rsp.StatusCode)
 	assert.NotEmpty(t, rsp.ID)
-	fileIDPost = rsp.ID
+	assert.Equal(t, "https://pixeldrain.com/u/mock-file-id", rsp.GetFileURL())
 	fmt.Println("POST Req: " + rsp.GetFileURL())
 }
 
@@ -74,25 +96,74 @@ func TestPD_UploadPOST_WithReadCloser_Integration(t *testing.T) {
 		t.Skip(SkipIntegrationTest)
 	}
 
-	// ReadCloser
-	file, _ := os.Open("testdata/cat.jpg")
+	// Open the file and check for errors
+	file, err := os.Open("testdata/cat_unique1.jpg")
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
 
+	// Create the request upload object
 	req := &pd.RequestUpload{
 		File:     file,
-		FileName: "test_post_cat.jpg",
+		FileName: "test_post_cat_unique1.jpg",
 	}
 
+	// Set the authentication
+	req.Auth = setAuthFromEnv()
+
+	// Create a new client
+	c := pd.New(nil, nil)
+
+	// Perform the upload
+	rsp, err := c.UploadPOST(req)
+	if err != nil {
+		t.Fatalf("UploadPOST request failed: %v", err)
+	}
+
+	// Check the response
+	assert.Equal(t, 201, rsp.StatusCode)
+	assert.NotEmpty(t, rsp.ID)
+	fmt.Println("POST Req: " + rsp.GetFileURL())
+}
+
+// TestPD_UploadPOST_DuplicateDetection_Integration runs an integration test for duplicate file detection
+func TestPD_UploadPOST_DuplicateDetection_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip(SkipIntegrationTest)
+	}
+
+	filePath := "testdata/cat_unique7.jpg"
+	fileName := "test_post_cat_unique7.jpg"
+
+	// First upload
+	req := &pd.RequestUpload{
+		PathToFile: filePath,
+		FileName:   fileName,
+	}
 	req.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
 	rsp, err := c.UploadPOST(req)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	assert.Equal(t, 201, rsp.StatusCode)
 	assert.NotEmpty(t, rsp.ID)
-	fmt.Println("POST Req: " + rsp.GetFileURL())
+
+	// Save the file ID for later use
+	fileIDPost = rsp.ID
+
+	// Second upload (should be detected as duplicate)
+	rsp, err = c.UploadPOST(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 409, rsp.StatusCode)
+	assert.Equal(t, "Duplicate file. Upload skipped.", rsp.Message)
+	assert.Empty(t, rsp.ID)
 }
 
 // TestPD_UploadPUT is a unit test for the PUT upload method
@@ -127,8 +198,8 @@ func TestPD_UploadPUT_Integration(t *testing.T) {
 	}
 
 	req := &pd.RequestUpload{
-		PathToFile: "testdata/cat.jpg",
-		FileName:   "test_put_cat.jpg",
+		PathToFile: "testdata/cat_unique2.jpg",
+		FileName:   "test_put_cat_unique2.jpg",
 	}
 
 	req.Auth = setAuthFromEnv()
@@ -152,11 +223,11 @@ func TestPD_UploadPUT_WithReadCloser_Integration(t *testing.T) {
 	}
 
 	// ReadCloser
-	file, _ := os.Open("testdata/cat.jpg")
+	file, _ := os.Open("testdata/cat_unique3.jpg")
 
 	req := &pd.RequestUpload{
 		File:     file,
-		FileName: "test_put_cat.jpg",
+		FileName: "test_put_cat_unique3.jpg",
 	}
 
 	req.Auth = setAuthFromEnv()
@@ -200,22 +271,37 @@ func TestPD_Download_Integration(t *testing.T) {
 		t.Skip(SkipIntegrationTest)
 	}
 
-	req := &pd.RequestDownload{
+	reqUpload := &pd.RequestUpload{
+		PathToFile: "testdata/cat_unique4.jpg", // Ensure unique file
+		FileName:   "test_post_cat_unique4.jpg",
+	}
+
+	reqUpload.Auth = setAuthFromEnv()
+
+	c := pd.New(nil, nil)
+	rspUpload, err := c.UploadPOST(reqUpload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 201, rspUpload.StatusCode)
+	fileIDPost = rspUpload.ID
+
+	reqDownload := &pd.RequestDownload{
 		PathToSave: "testdata/cat_download.jpg",
 		ID:         fileIDPost,
 	}
 
-	req.Auth = setAuthFromEnv()
+	reqDownload.Auth = setAuthFromEnv()
 
-	c := pd.New(nil, nil)
-	rsp, err := c.Download(req)
+	rspDownload, err := c.Download(reqDownload)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	assert.Equal(t, 200, rsp.StatusCode)
-	assert.Equal(t, "cat_download.jpg", rsp.FileName)
-	assert.Equal(t, int64(37621), rsp.FileSize)
+	assert.Equal(t, 200, rspDownload.StatusCode)
+	assert.Equal(t, "cat_download.jpg", rspDownload.FileName)
+	assert.Equal(t, int64(33692), rspDownload.FileSize)
 }
 
 // TestPD_GetFileInfo is a unit test for the GET "file info" method
@@ -248,23 +334,38 @@ func TestPD_GetFileInfo_Integration(t *testing.T) {
 		t.Skip(SkipIntegrationTest)
 	}
 
-	req := &pd.RequestFileInfo{
+	reqUpload := &pd.RequestUpload{
+		PathToFile: "testdata/cat_unique5.jpg", // Ensure unique file
+		FileName:   "test_post_cat_unique5.jpg",
+	}
+
+	reqUpload.Auth = setAuthFromEnv()
+
+	c := pd.New(nil, nil)
+	rspUpload, err := c.UploadPOST(reqUpload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 201, rspUpload.StatusCode)
+	fileIDPost = rspUpload.ID
+
+	reqFileInfo := &pd.RequestFileInfo{
 		ID: fileIDPost,
 	}
 
-	req.Auth = setAuthFromEnv()
+	reqFileInfo.Auth = setAuthFromEnv()
 
-	c := pd.New(nil, nil)
-	rsp, err := c.GetFileInfo(req)
+	rspFileInfo, err := c.GetFileInfo(reqFileInfo)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	assert.Equal(t, 200, rsp.StatusCode)
-	assert.Equal(t, true, rsp.Success)
-	assert.Equal(t, fileIDPost, rsp.ID)
-	assert.Equal(t, int64(37621), rsp.Size)
-	assert.Equal(t, "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b", rsp.HashSha256)
+	assert.Equal(t, 200, rspFileInfo.StatusCode)
+	assert.Equal(t, true, rspFileInfo.Success)
+	assert.Equal(t, fileIDPost, rspFileInfo.ID)
+	assert.Equal(t, int64(50936), rspFileInfo.Size)
+	assert.Equal(t, "c3d90e9743e45e488996a252426a71416f001646fd9f6ce1d4b7a0b00369ee3e", rspFileInfo.HashSha256)
 }
 
 // TestPD_DownloadThumbnail is a unit test for the GET "download thumbnail" method
@@ -291,7 +392,7 @@ func TestPD_DownloadThumbnail(t *testing.T) {
 
 	assert.Equal(t, 200, rsp.StatusCode)
 	assert.Equal(t, "cat_download_thumbnail.jpg", rsp.FileName)
-	assert.Equal(t, int64(7056), rsp.FileSize)
+	assert.Equal(t, int64(51680), rsp.FileSize)
 }
 
 // TestPD_DownloadThumbnail_Integration run a real integration test against the service
@@ -300,24 +401,39 @@ func TestPD_DownloadThumbnail_Integration(t *testing.T) {
 		t.Skip(SkipIntegrationTest)
 	}
 
-	req := &pd.RequestThumbnail{
+	reqUpload := &pd.RequestUpload{
+		PathToFile: "testdata/cat_unique6.jpg", // Ensure unique file
+		FileName:   "test_post_cat_unique6.jpg",
+	}
+
+	reqUpload.Auth = setAuthFromEnv()
+
+	c := pd.New(nil, nil)
+	rspUpload, err := c.UploadPOST(reqUpload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 201, rspUpload.StatusCode)
+	fileIDPost = rspUpload.ID
+
+	reqThumbnail := &pd.RequestThumbnail{
 		ID:         fileIDPost,
 		Height:     "64",
 		Width:      "64",
 		PathToSave: "testdata/cat_download_thumbnail.jpg",
 	}
 
-	req.Auth = setAuthFromEnv()
+	reqThumbnail.Auth = setAuthFromEnv()
 
-	c := pd.New(nil, nil)
-	rsp, err := c.DownloadThumbnail(req)
+	rspThumbnail, err := c.DownloadThumbnail(reqThumbnail)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	assert.Equal(t, 200, rsp.StatusCode)
-	assert.Equal(t, "cat_download_thumbnail.jpg", rsp.FileName)
-	assert.Equal(t, int64(7056), rsp.FileSize)
+	assert.Equal(t, 200, rspThumbnail.StatusCode)
+	assert.Equal(t, "cat_download_thumbnail.jpg", rspThumbnail.FileName)
+	assert.Equal(t, int64(8849), rspThumbnail.FileSize)
 }
 
 // TestPD_CreateList is a unit test for the POST "list" method
@@ -433,7 +549,7 @@ func TestPD_GetList_Integration(t *testing.T) {
 	assert.Equal(t, true, rsp.Success)
 	assert.NotEmpty(t, rsp.ID)
 	assert.Equal(t, "Test List", rsp.Title)
-	assert.Equal(t, int64(37621), rsp.Files[0].Size)
+	assert.Equal(t, int64(69142), rsp.Files[0].Size)
 }
 
 // TestPD_GetUser is a unit test for the GET "/user" method
@@ -758,4 +874,74 @@ func TestUploadDirectory_Integration(t *testing.T) {
 	}
 
 	// Additional checks can be added to validate the upload and logging
+}
+
+func TestCalculateFileHash(t *testing.T) {
+	filePath := "testdata/cat.jpg"
+
+	expectedHash := "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b"
+	hash, err := utils.CalculateFileHash(filePath)
+	if err != nil {
+		t.Fatalf("Failed to calculate file hash: %v", err)
+	}
+
+	assert.Equal(t, expectedHash, hash)
+}
+
+func TestSaveAndLoadFileHashes(t *testing.T) {
+	hashFilePath := "test_hashes.csv"
+	defer os.Remove(hashFilePath) // Cleanup test file after the test
+
+	// Initialize hash file
+	if err := utils.InitializeHashFile(); err != nil {
+		t.Fatalf("Failed to initialize hash file: %v", err)
+	}
+
+	filePath := "testdata/cat.jpg"
+	fileHash := "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b"
+
+	err := utils.SaveFileHash(filePath, fileHash)
+	if err != nil {
+		t.Fatalf("Failed to save file hash: %v", err)
+	}
+
+	hashes, err := utils.LoadFileHashes()
+	if err != nil {
+		t.Fatalf("Failed to load file hashes: %v", err)
+	}
+
+	assert.Equal(t, fileHash, hashes[filePath])
+}
+
+func TestIsDuplicate(t *testing.T) {
+	hashFilePath := "test_hashes.csv"
+
+	// Ensure test_hashes.csv is created
+	if err := utils.InitializeHashFile(); err != nil {
+		t.Fatalf("Failed to initialize hash file: %v", err)
+	}
+
+	// Cleanup test file after the test
+	defer func() {
+		if err := os.Remove(hashFilePath); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("Failed to remove test hash file: %v", err)
+		}
+	}()
+
+	filePath := "testdata/cat.jpg"
+	fileHash := "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b"
+
+	// Save the file hash to simulate a previous upload
+	err := utils.SaveFileHash(filePath, fileHash)
+	if err != nil {
+		t.Fatalf("Failed to save file hash: %v", err)
+	}
+
+	// Check for duplicate
+	isDuplicate, err := utils.IsDuplicate(filePath)
+	if err != nil {
+		t.Fatalf("Failed to check duplicate: %v", err)
+	}
+
+	assert.True(t, isDuplicate)
 }

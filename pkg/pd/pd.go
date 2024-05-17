@@ -86,7 +86,7 @@ func New(opt *ClientOptions, c *Client) *PixelDrainClient {
 	return pdc
 }
 
-// UploadPOST POST /api/file |  Updated method to include directory upload functionality
+// UploadPOST POST /api/file | Updated method to include directory upload functionality
 // curl -X POST -i -H "Authorization: Basic <TOKEN>" -F "file=@cat.jpg" https://pixeldrain.com/api/file
 func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error) {
 	if r.PathToFile == "" && r.File == nil {
@@ -102,6 +102,24 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		if fileInfo.IsDir() {
 			// If it's a directory, use UploadDirectory method
 			return nil, pd.UploadDirectory(r.PathToFile, r.Auth)
+		}
+	}
+
+	// Check for duplicate file
+	if r.PathToFile != "" {
+		isDuplicate, err := utils.IsDuplicate(r.PathToFile)
+		if err != nil {
+			return nil, err
+		}
+		if isDuplicate {
+			log.Printf("File %s is a duplicate. Skipping upload.", r.PathToFile)
+			return &ResponseUpload{
+				ResponseDefault: ResponseDefault{
+					Success:    false,
+					StatusCode: http.StatusConflict,
+					Message:    "Duplicate file. Upload skipped.",
+				},
+			}, nil
 		}
 	}
 
@@ -151,8 +169,8 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 			return nil, err
 		}
 		defer func() {
-			if err := file.Close(); err != nil {
-				log.Printf("Error closing file: %v", err)
+			if cerr := file.Close(); cerr != nil {
+				log.Printf("Error closing file: %v", cerr)
 			}
 		}()
 
@@ -194,22 +212,34 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 	formattedFileSize := utils.FormatFileSize(fileSize)
 
 	// Gather upload information and save it to CSV
-	uploadInfo := utils.UploadInfo{
-		FileName:       reqFileUpload.FileName,
-		DirectoryPath:  filePath,
-		URL:            uploadRsp.GetFileURL(),
-		UploadDateTime: time.Now().Format(time.RFC3339),
-		FileSize:       fileSize,
-		MIMEType:       mimeType,
-		Uploader:       r.Auth.APIKey,
-		UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
-		FormattedSize:  formattedFileSize,
-	}
+	if filePath != "N/A" {
+		uploadInfo := utils.UploadInfo{
+			FileName:       reqFileUpload.FileName,
+			DirectoryPath:  filePath,
+			URL:            uploadRsp.GetFileURL(),
+			UploadDateTime: time.Now().Format(time.RFC3339),
+			FileSize:       fileSize,
+			MIMEType:       mimeType,
+			Uploader:       r.Auth.APIKey,
+			UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
+			FormattedSize:  formattedFileSize,
+		}
 
-	log.Printf("Logging upload info for file in uploadFile: %s", filePath)
+		log.Printf("Logging upload info for file in uploadFile: %s", filePath)
 
-	if err := utils.SaveUploadInfoToCSV(uploadInfo, CSVFilePath); err != nil {
-		return nil, err
+		if err := utils.SaveUploadInfoToCSV(uploadInfo, CSVFilePath); err != nil {
+			return nil, err
+		}
+
+		// Calculate the hash and save it to CSV
+		fileHash, err := utils.CalculateFileHash(filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := utils.SaveFileHash(filePath, fileHash); err != nil {
+			return nil, err
+		}
 	}
 
 	return uploadRsp, nil
