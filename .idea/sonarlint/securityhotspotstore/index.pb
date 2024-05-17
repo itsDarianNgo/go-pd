@@ -38,3 +38,5 @@ O
 pkg/pd/utils/directory_utils.go,a\0\a0871a9d9974c186645b5e212309aa28d48c4137
 T
 $pkg/pd/utils/directory_utils_test.go,2\6\265793b416ada3ebd25ca984045a2457359fc131
+I
+pkg/pd/utils/file_size.go,0\4\0496ad8935847ac522bd3387be66149bd2531576

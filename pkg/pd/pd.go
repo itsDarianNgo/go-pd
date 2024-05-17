@@ -113,13 +113,12 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 		r.URL = fmt.Sprint(APIURL + "/file")
 	}
 
-	log.Printf("Starting upload for file: %s", r.PathToFile)
-
 	reqFileUpload := req.FileUpload{}
 	var filePath string
 	var fileSize int64
 	var mimeType string
 
+	log.Printf("Starting upload for file: %s", r.PathToFile)
 	if r.File != nil {
 		if r.FileName == "" {
 			return nil, errors.New(ErrMissingFilename)
@@ -170,18 +169,16 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 		"anonymous": r.Anonymous,
 	}
 
+	log.Printf("Sending POST request to %s with file: %s", r.URL, reqFileUpload.FileName)
 	if r.Auth.IsAuthAvailable() && !r.Anonymous {
 		addBasicAuthHeader(pd.Client.Header, "", r.Auth.APIKey)
 	}
-
-	log.Printf("Sending POST request to %s with file: %s", r.URL, reqFileUpload.FileName)
 
 	rsp, err := pd.Client.Request.Post(r.URL, pd.Client.Header, reqFileUpload, reqParams)
 	if pd.Debug {
 		log.Println(rsp.Dump())
 	}
 	if err != nil {
-		log.Printf("Error during POST request: %v", err)
 		return nil, err
 	}
 
@@ -194,6 +191,7 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 	}
 
 	log.Printf("File uploaded successfully: %s", reqFileUpload.FileName)
+	formattedFileSize := utils.FormatFileSize(fileSize)
 
 	// Gather upload information and save it to CSV
 	uploadInfo := utils.UploadInfo{
@@ -205,12 +203,12 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 		MIMEType:       mimeType,
 		Uploader:       r.Auth.APIKey,
 		UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
+		FormattedSize:  formattedFileSize,
 	}
 
 	log.Printf("Logging upload info for file in uploadFile: %s", filePath)
 
 	if err := utils.SaveUploadInfoToCSV(uploadInfo, CSVFilePath); err != nil {
-		log.Printf("Error logging upload info: %v", err)
 		return nil, err
 	}
 

@@ -2,25 +2,25 @@ package utils
 
 import (
 	"encoding/csv"
-	"fmt"
 	"os"
 )
 
 // UploadInfo holds the information about the uploaded file.
 type UploadInfo struct {
-	FileName       string
-	DirectoryPath  string
-	URL            string
-	UploadDateTime string
-	FileSize       int64
-	MIMEType       string
-	Uploader       string
-	UploadStatus   string
+	FileName       string `csv:"file_name"`
+	DirectoryPath  string `csv:"directory_path"`
+	URL            string `csv:"url"`
+	UploadDateTime string `csv:"upload_date_time"`
+	FileSize       int64  `csv:"file_size"`
+	FormattedSize  string `csv:"formatted_size"`
+	MIMEType       string `csv:"mime_type"`
+	Uploader       string `csv:"uploader"`
+	UploadStatus   string `csv:"upload_status"`
 }
 
 // SaveUploadInfoToCSV saves the upload information to a CSV file.
-func SaveUploadInfoToCSV(info UploadInfo, csvPath string) error {
-	file, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func SaveUploadInfoToCSV(info UploadInfo, filePath string) error {
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -29,27 +29,16 @@ func SaveUploadInfoToCSV(info UploadInfo, csvPath string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Write the header if the file is new
-	if fi, err := file.Stat(); err == nil && fi.Size() == 0 {
-		if err := writer.Write([]string{"File Name", "Directory Path", "URL", "Upload Date and Time", "File Size", "MIME Type", "Uploader Username", "Upload Status"}); err != nil {
-			return err
-		}
-	}
-
 	record := []string{
 		info.FileName,
 		info.DirectoryPath,
 		info.URL,
 		info.UploadDateTime,
-		fmt.Sprintf("%d", info.FileSize),
+		FormatFileSize(info.FileSize), // Use the formatted size here
 		info.MIMEType,
 		info.Uploader,
 		info.UploadStatus,
 	}
 
-	if err := writer.Write(record); err != nil {
-		return err
-	}
-
-	return nil
+	return writer.Write(record)
 }
