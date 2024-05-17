@@ -1,6 +1,7 @@
 package pd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/imroc/req"
@@ -96,30 +98,60 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 	}
 
 	reqFileUpload := req.FileUpload{}
+	var filePath string
+	var fileSize int64
+	var mimeType string
+
 	if r.File != nil {
 		if r.FileName == "" {
 			return nil, errors.New(ErrMissingFilename)
 		}
-
-		reqFileUpload.FileName = r.GetFileName()
+		reqFileUpload.FileName = r.FileName
 		reqFileUpload.FieldName = "file"
-		reqFileUpload.File = r.File
+
+		// Read the file into a buffer to determine the MIME type and size
+		var buf bytes.Buffer
+		size, err := io.Copy(&buf, r.File)
+		if err != nil {
+			return nil, err
+		}
+		r.File.Close()              // Close the original ReadCloser
+		r.File = io.NopCloser(&buf) // Reset the file reader
+
+		mimeType = http.DetectContentType(buf.Bytes()[:512])
+		fileSize = size
+		reqFileUpload.File = io.NopCloser(bytes.NewReader(buf.Bytes()))
+
+		// Attempt to use the PathToFile if provided, otherwise mark as "N/A"
+		if r.PathToFile != "" {
+			filePath = r.PathToFile
+		} else {
+			filePath = "N/A" // No file path when using io.ReadCloser
+		}
 	} else {
 		file, err := os.Open(r.PathToFile)
 		if err != nil {
 			return nil, err
 		}
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Printf("Error closing file: %v", err)
+			}
+		}()
 
-		reqFileUpload.FileName = r.GetFileName()
+		reqFileUpload.FileName = filepath.Base(r.PathToFile)
 		reqFileUpload.FieldName = "file"
 		reqFileUpload.File = file
+
+		filePath = r.PathToFile
+		fileSize = GetFileSize(filePath)
+		mimeType = GetMimeType(filePath)
 	}
 
 	reqParams := req.Param{
 		"anonymous": r.Anonymous,
 	}
 
-	// pixeldrain want an empty username and the APIKey as password
 	if r.Auth.IsAuthAvailable() && !r.Anonymous {
 		addBasicAuthHeader(pd.Client.Header, "", r.Auth.APIKey)
 	}
@@ -141,12 +173,12 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 
 	// Gather upload information and save it to CSV
 	uploadInfo := utils.UploadInfo{
-		FileName:       r.GetFileName(),
-		DirectoryPath:  r.PathToFile,
+		FileName:       reqFileUpload.FileName,
+		DirectoryPath:  filePath,
 		URL:            uploadRsp.GetFileURL(),
 		UploadDateTime: time.Now().Format(time.RFC3339),
-		FileSize:       GetFileSize(r.PathToFile),
-		MIMEType:       GetMimeType(r.PathToFile),
+		FileSize:       fileSize,
+		MIMEType:       mimeType,
 		Uploader:       r.Auth.APIKey,
 		UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
 	}
@@ -214,7 +246,7 @@ func (pd *PixelDrainClient) UploadPUT(r *RequestUpload) (*ResponseUpload, error)
 		}
 	}
 
-	// we dont send this paramter due a bug of pixeldrain side
+	// we don't send this parameter due a bug of pixeldrain side
 	//reqParams := req.Param{
 	//	"anonymous": r.Anonymous,
 	//}

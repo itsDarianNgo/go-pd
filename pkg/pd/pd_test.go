@@ -2,12 +2,12 @@ package pd_test
 
 import (
 	"fmt"
-	"github.com/itsDarianNgo/go-pd/pkg/pd/utils"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/itsDarianNgo/go-pd/pkg/pd"
+	"github.com/itsDarianNgo/go-pd/pkg/pd/utils"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 )
@@ -662,18 +662,26 @@ func TestSaveUploadInfoToCSV(t *testing.T) {
 	csvPath := "test_upload_logs.csv"
 	defer os.Remove(csvPath) // Cleanup test file after the test
 
+	// Get the actual file size
+	testFilePath := "testdata/test_file.jpg"
+	fileInfo, err := os.Stat(testFilePath)
+	if err != nil {
+		t.Fatalf("failed to get file stats: %v", err)
+	}
+	actualFileSize := fileInfo.Size()
+
 	info := utils.UploadInfo{
 		FileName:       "test_file.jpg",
 		DirectoryPath:  "/test/path",
 		URL:            "https://pixeldrain.com/u/test",
 		UploadDateTime: time.Now().Format(time.RFC3339),
-		FileSize:       123456,
+		FileSize:       actualFileSize,
 		MIMEType:       "image/jpeg",
 		Uploader:       "test_user",
 		UploadStatus:   "200",
 	}
 
-	err := utils.SaveUploadInfoToCSV(info, csvPath)
+	err = utils.SaveUploadInfoToCSV(info, csvPath)
 	if err != nil {
 		t.Fatalf("failed to save upload info to CSV: %v", err)
 	}
@@ -693,10 +701,7 @@ func TestSaveUploadInfoToCSV(t *testing.T) {
 		t.Fatalf("CSV file is empty, expected data to be written")
 	}
 
-	// Additional tests for MIME type and file size
-	testFilePath := "testdata/test_file.jpg"
 	expectedMimeType := "image/jpeg"
-	expectedFileSize := int64(123456)
 
 	mimeType := pd.GetMimeType(testFilePath)
 	if mimeType != expectedMimeType {
@@ -704,7 +709,7 @@ func TestSaveUploadInfoToCSV(t *testing.T) {
 	}
 
 	fileSize := pd.GetFileSize(testFilePath)
-	if fileSize != expectedFileSize {
-		t.Fatalf("expected file size %d, got %d", expectedFileSize, fileSize)
+	if fileSize != actualFileSize {
+		t.Fatalf("expected file size %d, got %d", actualFileSize, fileSize)
 	}
 }
