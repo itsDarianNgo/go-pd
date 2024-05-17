@@ -1,4 +1,4 @@
-module github.com/ManuelReschke/go-pd
+module github.com/itsDarianNgo/go-pd
 
 go 1.20
 

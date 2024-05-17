@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/github/v/release/ManuelReschke/go-pd)](https://github.com/ManuelReschke/go-pd/releases)
+[![Version](https://img.shields.io/github/v/release/ManuelReschke/go-pd)](https://github.com/itsDarianNgo/go-pd/releases)
 ![GitHub](https://img.shields.io/github/license/ManuelReschke/go-pd)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ManuelReschke/go-pd)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/ManuelReschke/go-pd)
@@ -31,7 +31,7 @@ A free pixeldrain.com client written in go. We use the super power from [imroc/r
 
 ## CLI Tool: Install
 
-Follow the link to download the correct binary for your system. [View Releases](https://github.com/ManuelReschke/go-pd/releases). It's available for Linux, ARM and Windows.
+Follow the link to download the correct binary for your system. [View Releases](https://github.com/itsDarianNgo/go-pd/releases). It's available for Linux, ARM and Windows.
 Download the correct archive, extract it and use the binary.
 
 ## CLI Tool: Upload a file
@@ -93,7 +93,7 @@ Because we want a simple, fast, robust and tested go package to upload to pixeld
 ### Import the pkg
 
 ```
- go get github.com/ManuelReschke/go-pd/pkg/pd
+ go get github.com/itsDarianNgo/go-pd/pkg/pd
 ```
 
 ## Example 1 - the easiest way to upload an anonymous file
@@ -105,7 +105,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ManuelReschke/go-pd/pkg/pd"
+	"github.com/itsDarianNgo/go-pd/pkg/pd"
 )
 
 func main() {
@@ -137,7 +137,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ManuelReschke/go-pd/pkg/pd"
+	"github.com/itsDarianNgo/go-pd/pkg/pd"
 )
 
 func main() {

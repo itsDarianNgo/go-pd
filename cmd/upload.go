@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/ManuelReschke/go-pd/internal/app"
+	"github.com/itsDarianNgo/go-pd/internal/app"
 
 	"github.com/spf13/cobra"
 )

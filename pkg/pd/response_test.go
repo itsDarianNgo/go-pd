@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ManuelReschke/go-pd/pkg/pd"
+	"github.com/itsDarianNgo/go-pd/pkg/pd"
 )
 
 func TestPD_ResponseDefault(t *testing.T) {

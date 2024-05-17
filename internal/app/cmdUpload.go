@@ -3,7 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
-	"github.com/ManuelReschke/go-pd/pkg/pd"
+	"github.com/itsDarianNgo/go-pd/pkg/pd"
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
