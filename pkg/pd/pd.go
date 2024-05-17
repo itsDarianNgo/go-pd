@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/imroc/req"
+	"github.com/itsDarianNgo/go-pd/pkg/pd/utils"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	ErrMissingPathToFile = "file path or file reader is required"
 	ErrMissingFileID     = "file id is required"
 	ErrMissingFilename   = "if you use ReadCloser you need to specify the filename"
+	CSVFilePath          = "upload_logs.csv" // Path to the CSV file
 )
 
 type ClientOptions struct {
@@ -137,7 +139,53 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		return nil, err
 	}
 
+	// Gather upload information and save it to CSV
+	uploadInfo := utils.UploadInfo{
+		FileName:       r.GetFileName(),
+		DirectoryPath:  r.PathToFile,
+		URL:            uploadRsp.GetFileURL(),
+		UploadDateTime: time.Now().Format(time.RFC3339),
+		FileSize:       GetFileSize(r.PathToFile),
+		MIMEType:       GetMimeType(r.PathToFile),
+		Uploader:       r.Auth.APIKey,
+		UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
+	}
+
+	if err := utils.SaveUploadInfoToCSV(uploadInfo, CSVFilePath); err != nil {
+		return nil, err
+	}
+
 	return uploadRsp, nil
+}
+
+// GetFileSize returns the size of the file.
+func GetFileSize(filePath string) int64 {
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return 0
+	}
+	return fileInfo.Size()
+}
+
+// GetMimeType returns the MIME type of the file.
+func GetMimeType(filePath string) string {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return ""
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}()
+
+	buffer := make([]byte, 512)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return ""
+	}
+
+	return http.DetectContentType(buffer)
 }
 
 // UploadPUT PUT /api/file/{name}
