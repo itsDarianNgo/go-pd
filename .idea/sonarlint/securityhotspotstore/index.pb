@@ -16,8 +16,6 @@ A
 :
 
 .gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302
-C
-utils/csv_logger.go,c\9\c93ef4e87092ed6dd59949b6ce05c8791fa88cdf
 7
 main.go,0\6\0607f785dfa3c3861b3239f6723eb276d8056461
 ;
@@ -34,9 +32,9 @@ F
 pkg/pd/upload_logs.csv,f\d\fd1362c327ed3bda380a5d85ef89bb5300365ebd
 F
 pkg/pd/request_test.go,b\e\beecee8f074ba023b5c7412c49a00ef5c1fa211b
-O
-pkg/pd/utils/request_helpers.go,6\a\6a6bafe160945c0923c093a2cb419bea6e49844b
-N
-pkg/pd/utils/ExecuteRequest.go,e\2\e22c7ca316d5a215cf1095b91aca36069e91b13d
 G
 pkg/pd/response_test.go,b\8\b8cdc333b381ea45a67266a9eff30b1afa603ae4
+O
+pkg/pd/utils/directory_utils.go,a\0\a0871a9d9974c186645b5e212309aa28d48c4137
+T
+$pkg/pd/utils/directory_utils_test.go,2\6\265793b416ada3ebd25ca984045a2457359fc131

@@ -39,7 +39,7 @@ func TestPD_UploadPOST(t *testing.T) {
 
 	assert.Equal(t, 201, rsp.StatusCode)
 	assert.NotEmpty(t, rsp.ID)
-	assert.Equal(t, "https://pixeldrain.com/u/123456", rsp.GetFileURL())
+	assert.Equal(t, "https://pixeldrain.com/u/mock-file-id", rsp.GetFileURL())
 	fmt.Println("POST Req: " + rsp.GetFileURL())
 }
 
@@ -712,4 +712,50 @@ func TestSaveUploadInfoToCSV(t *testing.T) {
 	if fileSize != actualFileSize {
 		t.Fatalf("expected file size %d, got %d", actualFileSize, fileSize)
 	}
+}
+
+func TestUploadDirectory(t *testing.T) {
+	// Create a mock server
+	server := pd.MockFileUploadServer()
+	defer server.Close()
+
+	clientOptions := &pd.ClientOptions{
+		Debug: true,
+	}
+
+	client := pd.New(clientOptions, nil)
+
+	// Mock Auth
+	auth := pd.Auth{
+		APIKey: "test-api-key",
+	}
+
+	err := client.UploadDirectory("testdata/test_directory", auth, server.URL)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Additional checks can be added to validate the upload and logging
+}
+
+func TestUploadDirectory_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip(SkipIntegrationTest)
+	}
+
+	clientOptions := &pd.ClientOptions{
+		Debug: true,
+	}
+
+	client := pd.New(clientOptions, nil)
+
+	// Replace with valid Auth credentials
+	auth := setAuthFromEnv()
+
+	err := client.UploadDirectory("testdata/test_directory", auth)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Additional checks can be added to validate the upload and logging
 }

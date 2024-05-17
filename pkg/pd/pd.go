@@ -86,16 +86,34 @@ func New(opt *ClientOptions, c *Client) *PixelDrainClient {
 	return pdc
 }
 
-// UploadPOST POST /api/file
+// UploadPOST POST /api/file |  Updated method to include directory upload functionality
 // curl -X POST -i -H "Authorization: Basic <TOKEN>" -F "file=@cat.jpg" https://pixeldrain.com/api/file
 func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error) {
 	if r.PathToFile == "" && r.File == nil {
 		return nil, errors.New(ErrMissingPathToFile)
 	}
 
+	// Check if PathToFile is a directory
+	if r.PathToFile != "" {
+		fileInfo, err := os.Stat(r.PathToFile)
+		if err != nil {
+			return nil, err
+		}
+		if fileInfo.IsDir() {
+			// If it's a directory, use UploadDirectory method
+			return nil, pd.UploadDirectory(r.PathToFile, r.Auth)
+		}
+	}
+
+	return pd.uploadFile(r)
+}
+
+func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error) {
 	if r.URL == "" {
 		r.URL = fmt.Sprint(APIURL + "/file")
 	}
+
+	log.Printf("Starting upload for file: %s", r.PathToFile)
 
 	reqFileUpload := req.FileUpload{}
 	var filePath string
@@ -156,11 +174,14 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		addBasicAuthHeader(pd.Client.Header, "", r.Auth.APIKey)
 	}
 
+	log.Printf("Sending POST request to %s with file: %s", r.URL, reqFileUpload.FileName)
+
 	rsp, err := pd.Client.Request.Post(r.URL, pd.Client.Header, reqFileUpload, reqParams)
 	if pd.Debug {
 		log.Println(rsp.Dump())
 	}
 	if err != nil {
+		log.Printf("Error during POST request: %v", err)
 		return nil, err
 	}
 
@@ -168,8 +189,11 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 	uploadRsp.StatusCode = rsp.Response().StatusCode
 	err = rsp.ToJSON(uploadRsp)
 	if err != nil {
+		log.Printf("Error parsing JSON response: %v", err)
 		return nil, err
 	}
+
+	log.Printf("File uploaded successfully: %s", reqFileUpload.FileName)
 
 	// Gather upload information and save it to CSV
 	uploadInfo := utils.UploadInfo{
@@ -183,7 +207,10 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		UploadStatus:   fmt.Sprintf("%d", uploadRsp.StatusCode),
 	}
 
+	log.Printf("Logging upload info for file in uploadFile: %s", filePath)
+
 	if err := utils.SaveUploadInfoToCSV(uploadInfo, CSVFilePath); err != nil {
+		log.Printf("Error logging upload info: %v", err)
 		return nil, err
 	}
 
@@ -657,4 +684,38 @@ func addBasicAuthHeader(h req.Header, u string, p string) *req.Header {
 func generateBasicAuthToken(u string, p string) string {
 	auth := u + ":" + p
 	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+// UploadDirectory uploads all files in the given directory and its subdirectories
+func (pd *PixelDrainClient) UploadDirectory(directoryPath string, auth Auth, baseURL ...string) error {
+	// Use the provided base URL if present
+	apiURL := APIURL
+	if len(baseURL) > 0 {
+		apiURL = baseURL[0] + "/api"
+	}
+
+	files, err := utils.GetFilesInDirectory(directoryPath)
+	if err != nil {
+		return err
+	}
+
+	for _, filePath := range files {
+		req := &RequestUpload{
+			PathToFile: filePath,
+			Anonymous:  false,
+			Auth:       auth,
+			URL:        apiURL + "/file",
+		}
+
+		log.Printf("Uploading file: %s", filePath)
+		resp, err := pd.UploadPOST(req)
+		if err != nil {
+			log.Printf("Error uploading file %s: %v", filePath, err)
+			return err
+		}
+
+		log.Printf("Upload response for file %s: %+v", filePath, resp)
+	}
+
+	return nil
 }

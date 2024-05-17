@@ -11,29 +11,30 @@ import (
 
 func MockFileUploadServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case "POST":
 			// ##########################################
 			// POST /file
-			if r.URL.EscapedPath() == "/file" {
+			if r.URL.EscapedPath() == "/file" || r.URL.EscapedPath() == "/api/file" {
 				_ = r.ParseMultipartForm(10485760)
 				file := r.MultipartForm.File["file"]
 
 				if file == nil || len(file) == 0 {
-					log.Fatalln("Except request to have 'file'")
+					log.Fatalln("Expect request to have 'file'")
 				}
 
 				if r.FormValue("anonymous") == "" {
-					log.Fatalln("Except request to have form value 'anonymous'")
+					log.Fatalln("Expect request to have form value 'anonymous'")
 				}
 
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)
 				str := `{
 				"success": true,
-				"id": "123456"
+				"id": "mock-file-id"
 			}`
 				_, _ = w.Write([]byte(str))
+				return
 			}
 
 			// ##########################################
@@ -41,12 +42,14 @@ func MockFileUploadServer() *httptest.Server {
 			if r.URL.EscapedPath() == "/list" {
 				_ = r.ParseForm()
 
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				str := `{
-					"success": true,
-					"id": "123456"
-				}`
+				"success": true,
+				"id": "123456"
+			}`
 				_, _ = w.Write([]byte(str))
+				return
 			}
 
 		case "PUT":
@@ -61,10 +64,6 @@ func MockFileUploadServer() *httptest.Server {
 			if r.Body == nil || r.ContentLength == 0 {
 				log.Fatalln("Empty body in PUT request")
 			}
-
-			//if r.FormValue("anonymous") == "" {
-			//	log.Fatalln("Except request to have form value 'anonymous'")
-			//}
 
 			w.WriteHeader(http.StatusCreated)
 			str := `{
@@ -289,7 +288,7 @@ func MockFileUploadServer() *httptest.Server {
 
 			return
 		default:
-			return
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
 }
