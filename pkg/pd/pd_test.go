@@ -17,16 +17,37 @@ const SkipIntegrationTest = "skipping integration test"
 var fileIDPost string
 var fileIDPut string
 var listID string
+var testHashFilePath = "test_hashes.csv"
 
 // SetupTestEnvironment cleans up the test environment before running tests
 func SetupTestEnvironment() {
-	// Remove the existing hashes.csv file to ensure a clean test environment
-	if err := os.Remove("hashes.csv"); err != nil && !os.IsNotExist(err) {
+	err := os.Setenv("ENV_MODE", "test") // Set environment mode to test
+	if err != nil {
+		fmt.Printf("Error setting environment variable: %v\n", err)
+	}
+	// Remove the existing test hashes file to ensure a clean test environment
+	testHashFilePath := utils.GetHashFilePath()
+	if err := os.Remove(testHashFilePath); err != nil && !os.IsNotExist(err) {
 		fmt.Printf("Error removing test hash file: %v\n", err)
 	}
 }
 
-// TestPD_UploadPOST is a unit test for the POST upload method
+// CleanupTestEnvironment cleans up the test environment after running tests
+func CleanupTestEnvironment() {
+	testHashFilePath := utils.GetHashFilePath()
+	if err := os.Remove(testHashFilePath); err != nil && !os.IsNotExist(err) {
+		fmt.Printf("Error removing test hash file: %v\n", err)
+	}
+}
+
+// TestMain sets up and tears down the test environment
+func TestMain(m *testing.M) {
+	SetupTestEnvironment()
+	code := m.Run() // Run the tests
+	CleanupTestEnvironment()
+	os.Exit(code)
+} // TestPD_UploadPOST is a unit test for // the POST upload method
+
 func TestPD_UploadPOST(t *testing.T) {
 	SetupTestEnvironment()
 
@@ -34,8 +55,11 @@ func TestPD_UploadPOST(t *testing.T) {
 	defer server.Close()
 	testURL := server.URL + "/file"
 
+	// Define the hash file path
+	hashFilePath := "test_hashes.csv"
+
 	// Initialize hash file
-	if err := utils.InitializeHashFile(); err != nil {
+	if err := utils.InitializeHashFile(hashFilePath); err != nil {
 		t.Fatalf("Failed to initialize hash file: %v", err)
 	}
 
@@ -47,7 +71,7 @@ func TestPD_UploadPOST(t *testing.T) {
 	}
 
 	c := pd.New(nil, nil)
-	rsp, err := c.UploadPOST(req)
+	rsp, err := c.UploadPOST(req, hashFilePath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -66,8 +90,11 @@ func TestPD_UploadPOST_Integration(t *testing.T) {
 	defer server.Close()
 	testURL := server.URL + "/file"
 
+	// Define the hash file path
+	hashFilePath := "test_hashes.csv"
+
 	// Initialize hash file
-	if err := utils.InitializeHashFile(); err != nil {
+	if err := utils.InitializeHashFile(hashFilePath); err != nil {
 		t.Fatalf("Failed to initialize hash file: %v", err)
 	}
 
@@ -79,7 +106,7 @@ func TestPD_UploadPOST_Integration(t *testing.T) {
 	}
 
 	c := pd.New(nil, nil)
-	rsp, err := c.UploadPOST(req)
+	rsp, err := c.UploadPOST(req, testHashFilePath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -96,32 +123,22 @@ func TestPD_UploadPOST_WithReadCloser_Integration(t *testing.T) {
 		t.Skip(SkipIntegrationTest)
 	}
 
-	// Open the file and check for errors
-	file, err := os.Open("testdata/cat_unique1.jpg")
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
-	}
-	defer file.Close()
+	file, _ := os.Open("testdata/cat_unique1.jpg") // Ensure unique file
 
-	// Create the request upload object
 	req := &pd.RequestUpload{
 		File:     file,
 		FileName: "test_post_cat_unique1.jpg",
 	}
 
-	// Set the authentication
 	req.Auth = setAuthFromEnv()
 
-	// Create a new client
 	c := pd.New(nil, nil)
-
-	// Perform the upload
-	rsp, err := c.UploadPOST(req)
+	hashFilePath := "test_hashes.csv"
+	rsp, err := c.UploadPOST(req, hashFilePath)
 	if err != nil {
-		t.Fatalf("UploadPOST request failed: %v", err)
+		t.Error(err)
 	}
 
-	// Check the response
 	assert.Equal(t, 201, rsp.StatusCode)
 	assert.NotEmpty(t, rsp.ID)
 	fmt.Println("POST Req: " + rsp.GetFileURL())
@@ -144,7 +161,8 @@ func TestPD_UploadPOST_DuplicateDetection_Integration(t *testing.T) {
 	req.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
-	rsp, err := c.UploadPOST(req)
+	hashFilePath := "test_hashes.csv"
+	rsp, err := c.UploadPOST(req, hashFilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +174,7 @@ func TestPD_UploadPOST_DuplicateDetection_Integration(t *testing.T) {
 	fileIDPost = rsp.ID
 
 	// Second upload (should be detected as duplicate)
-	rsp, err = c.UploadPOST(req)
+	rsp, err = c.UploadPOST(req, testHashFilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +297,7 @@ func TestPD_Download_Integration(t *testing.T) {
 	reqUpload.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
-	rspUpload, err := c.UploadPOST(reqUpload)
+	rspUpload, err := c.UploadPOST(reqUpload, testHashFilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +360,7 @@ func TestPD_GetFileInfo_Integration(t *testing.T) {
 	reqUpload.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
-	rspUpload, err := c.UploadPOST(reqUpload)
+	rspUpload, err := c.UploadPOST(reqUpload, "test_hashes.csv")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +427,7 @@ func TestPD_DownloadThumbnail_Integration(t *testing.T) {
 	reqUpload.Auth = setAuthFromEnv()
 
 	c := pd.New(nil, nil)
-	rspUpload, err := c.UploadPOST(reqUpload)
+	rspUpload, err := c.UploadPOST(reqUpload, "test_hashes.csv")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -819,18 +837,19 @@ func TestSaveUploadInfoToCSV(t *testing.T) {
 
 	expectedMimeType := "image/jpeg"
 
-	mimeType := pd.GetMimeType(testFilePath)
+	mimeType := utils.GetMimeType(testFilePath)
 	if mimeType != expectedMimeType {
 		t.Fatalf("expected MIME type %s, got %s", expectedMimeType, mimeType)
 	}
 
-	fileSize := pd.GetFileSize(testFilePath)
+	fileSize := utils.GetFileSize(testFilePath)
 	if fileSize != actualFileSize {
 		t.Fatalf("expected file size %d, got %d", actualFileSize, fileSize)
 	}
 }
 
 func TestUploadDirectory(t *testing.T) {
+	SetupTestEnvironment()
 	// Create a mock server
 	server := pd.MockFileUploadServer()
 	defer server.Close()
@@ -846,6 +865,7 @@ func TestUploadDirectory(t *testing.T) {
 		APIKey: "test-api-key",
 	}
 
+	// Use the mock server URL as the base URL
 	err := client.UploadDirectory("testdata/test_directory", auth, server.URL)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -855,6 +875,7 @@ func TestUploadDirectory(t *testing.T) {
 }
 
 func TestUploadDirectory_Integration(t *testing.T) {
+	SetupTestEnvironment()
 	if testing.Short() {
 		t.Skip(SkipIntegrationTest)
 	}
@@ -865,10 +886,12 @@ func TestUploadDirectory_Integration(t *testing.T) {
 
 	client := pd.New(clientOptions, nil)
 
-	// Replace with valid Auth credentials
 	auth := setAuthFromEnv()
 
-	err := client.UploadDirectory("testdata/test_directory", auth)
+	// Use the actual API URL
+	apiURL := "https://pixeldrain.com/api"
+
+	err := client.UploadDirectory("testdata/test_directory", auth, apiURL)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -889,23 +912,23 @@ func TestCalculateFileHash(t *testing.T) {
 }
 
 func TestSaveAndLoadFileHashes(t *testing.T) {
-	hashFilePath := "test_hashes.csv"
-	defer os.Remove(hashFilePath) // Cleanup test file after the test
+	testHashFilePath := "test_hashes.csv"
+	defer os.Remove(testHashFilePath) // Cleanup test file after the test
 
 	// Initialize hash file
-	if err := utils.InitializeHashFile(); err != nil {
+	if err := utils.InitializeHashFile(testHashFilePath); err != nil {
 		t.Fatalf("Failed to initialize hash file: %v", err)
 	}
 
 	filePath := "testdata/cat.jpg"
 	fileHash := "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b"
 
-	err := utils.SaveFileHash(filePath, fileHash)
+	err := utils.SaveFileHash(testHashFilePath, filePath, fileHash)
 	if err != nil {
 		t.Fatalf("Failed to save file hash: %v", err)
 	}
 
-	hashes, err := utils.LoadFileHashes()
+	hashes, err := utils.LoadFileHashes(testHashFilePath)
 	if err != nil {
 		t.Fatalf("Failed to load file hashes: %v", err)
 	}
@@ -914,16 +937,16 @@ func TestSaveAndLoadFileHashes(t *testing.T) {
 }
 
 func TestIsDuplicate(t *testing.T) {
-	hashFilePath := "test_hashes.csv"
+	testHashFilePath := "test_hashes.csv"
 
 	// Ensure test_hashes.csv is created
-	if err := utils.InitializeHashFile(); err != nil {
+	if err := utils.InitializeHashFile(testHashFilePath); err != nil {
 		t.Fatalf("Failed to initialize hash file: %v", err)
 	}
 
 	// Cleanup test file after the test
 	defer func() {
-		if err := os.Remove(hashFilePath); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(testHashFilePath); err != nil && !os.IsNotExist(err) {
 			t.Fatalf("Failed to remove test hash file: %v", err)
 		}
 	}()
@@ -932,13 +955,13 @@ func TestIsDuplicate(t *testing.T) {
 	fileHash := "1af93d68009bdfd52e1da100a019a30b5fe083d2d1130919225ad0fd3d1fed0b"
 
 	// Save the file hash to simulate a previous upload
-	err := utils.SaveFileHash(filePath, fileHash)
+	err := utils.SaveFileHash(testHashFilePath, filePath, fileHash)
 	if err != nil {
 		t.Fatalf("Failed to save file hash: %v", err)
 	}
 
 	// Check for duplicate
-	isDuplicate, err := utils.IsDuplicate(filePath)
+	isDuplicate, err := utils.IsDuplicate(testHashFilePath, filePath)
 	if err != nil {
 		t.Fatalf("Failed to check duplicate: %v", err)
 	}

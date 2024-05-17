@@ -88,7 +88,7 @@ func New(opt *ClientOptions, c *Client) *PixelDrainClient {
 
 // UploadPOST POST /api/file | Updated method to include directory upload functionality
 // curl -X POST -i -H "Authorization: Basic <TOKEN>" -F "file=@cat.jpg" https://pixeldrain.com/api/file
-func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error) {
+func (pd *PixelDrainClient) UploadPOST(r *RequestUpload, hashFilePath string) (*ResponseUpload, error) {
 	if r.PathToFile == "" && r.File == nil {
 		return nil, errors.New(ErrMissingPathToFile)
 	}
@@ -101,13 +101,13 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		}
 		if fileInfo.IsDir() {
 			// If it's a directory, use UploadDirectory method
-			return nil, pd.UploadDirectory(r.PathToFile, r.Auth)
+			return nil, pd.UploadDirectory(r.PathToFile, r.Auth, hashFilePath)
 		}
 	}
 
 	// Check for duplicate file
 	if r.PathToFile != "" {
-		isDuplicate, err := utils.IsDuplicate(r.PathToFile)
+		isDuplicate, err := utils.IsDuplicate(hashFilePath, r.PathToFile)
 		if err != nil {
 			return nil, err
 		}
@@ -123,10 +123,10 @@ func (pd *PixelDrainClient) UploadPOST(r *RequestUpload) (*ResponseUpload, error
 		}
 	}
 
-	return pd.uploadFile(r)
+	return pd.uploadFile(r, hashFilePath)
 }
 
-func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error) {
+func (pd *PixelDrainClient) uploadFile(r *RequestUpload, hashFilePath string) (*ResponseUpload, error) {
 	if r.URL == "" {
 		r.URL = fmt.Sprint(APIURL + "/file")
 	}
@@ -179,8 +179,8 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 		reqFileUpload.File = file
 
 		filePath = r.PathToFile
-		fileSize = GetFileSize(filePath)
-		mimeType = GetMimeType(filePath)
+		fileSize = utils.GetFileSize(filePath)
+		mimeType = utils.GetMimeType(filePath)
 	}
 
 	reqParams := req.Param{
@@ -237,42 +237,12 @@ func (pd *PixelDrainClient) uploadFile(r *RequestUpload) (*ResponseUpload, error
 			return nil, err
 		}
 
-		if err := utils.SaveFileHash(filePath, fileHash); err != nil {
+		if err := utils.SaveFileHash(hashFilePath, filePath, fileHash); err != nil {
 			return nil, err
 		}
 	}
 
 	return uploadRsp, nil
-}
-
-// GetFileSize returns the size of the file.
-func GetFileSize(filePath string) int64 {
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		return 0
-	}
-	return fileInfo.Size()
-}
-
-// GetMimeType returns the MIME type of the file.
-func GetMimeType(filePath string) string {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return ""
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Printf("Error closing file: %v", err)
-		}
-	}()
-
-	buffer := make([]byte, 512)
-	_, err = file.Read(buffer)
-	if err != nil {
-		return ""
-	}
-
-	return http.DetectContentType(buffer)
 }
 
 // UploadPUT PUT /api/file/{name}
@@ -719,7 +689,7 @@ func (pd *PixelDrainClient) UploadDirectory(directoryPath string, auth Auth, bas
 	// Use the provided base URL if present
 	apiURL := APIURL
 	if len(baseURL) > 0 {
-		apiURL = baseURL[0] + "/api"
+		apiURL = baseURL[0]
 	}
 
 	files, err := utils.GetFilesInDirectory(directoryPath)
@@ -727,8 +697,11 @@ func (pd *PixelDrainClient) UploadDirectory(directoryPath string, auth Auth, bas
 		return err
 	}
 
+	// Get the appropriate hash file path based on the environment
+	hashFilePath := utils.GetHashFilePath()
+
 	for _, filePath := range files {
-		req := &RequestUpload{
+		reqUpload := &RequestUpload{
 			PathToFile: filePath,
 			Anonymous:  false,
 			Auth:       auth,
@@ -736,7 +709,7 @@ func (pd *PixelDrainClient) UploadDirectory(directoryPath string, auth Auth, bas
 		}
 
 		log.Printf("Uploading file: %s", filePath)
-		resp, err := pd.UploadPOST(req)
+		resp, err := pd.UploadPOST(reqUpload, hashFilePath)
 		if err != nil {
 			log.Printf("Error uploading file %s: %v", filePath, err)
 			return err

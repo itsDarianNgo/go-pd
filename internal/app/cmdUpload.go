@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 )
 
+const hashFilePath = "hashes.csv" // Define the hash file path
+
 func RunUpload(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return errors.New("please add a file to your upload request")
@@ -36,7 +38,7 @@ func RunUpload(cmd *cobra.Command, args []string) error {
 		}
 
 		c := pd.New(nil, nil)
-		rsp, err := c.UploadPOST(req)
+		rsp, err := c.UploadPOST(req, hashFilePath) // Pass hashFilePath as an argument
 		if err != nil {
 			return err
 		}

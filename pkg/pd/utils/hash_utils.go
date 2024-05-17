@@ -9,6 +9,15 @@ import (
 	"os"
 )
 
+// GetHashFilePath returns the appropriate hash file path based on the environment mode.
+func GetHashFilePath() string {
+	envMode := os.Getenv("ENV_MODE")
+	if envMode == "test" {
+		return "test_hashes.csv"
+	}
+	return "hashes.csv"
+}
+
 // CalculateFileHash calculates and returns the SHA-256 hash of a file.
 func CalculateFileHash(filePath string) (string, error) {
 	file, err := os.Open(filePath)
@@ -29,10 +38,8 @@ func CalculateFileHash(filePath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-const hashFilePath = "hashes.csv"
-
 // InitializeHashFile checks if the hash file exists and creates it if not.
-func InitializeHashFile() error {
+func InitializeHashFile(hashFilePath string) error {
 	if _, err := os.Stat(hashFilePath); os.IsNotExist(err) {
 		file, err := os.Create(hashFilePath)
 		if err != nil {
@@ -46,13 +53,13 @@ func InitializeHashFile() error {
 }
 
 // SaveFileHash saves the file path and its hash to a CSV file if it doesn't already exist.
-func SaveFileHash(filePath, hash string) error {
-	if err := InitializeHashFile(); err != nil {
+func SaveFileHash(hashFilePath, filePath, hash string) error {
+	if err := InitializeHashFile(hashFilePath); err != nil {
 		return err
 	}
 
 	// Check if the file is a duplicate before saving
-	isDuplicate, err := IsDuplicate(filePath)
+	isDuplicate, err := IsDuplicate(hashFilePath, filePath)
 	if err != nil {
 		return err
 	}
@@ -77,8 +84,8 @@ func SaveFileHash(filePath, hash string) error {
 }
 
 // LoadFileHashes loads the file hashes from a CSV file into a map.
-func LoadFileHashes() (map[string]string, error) {
-	if err := InitializeHashFile(); err != nil {
+func LoadFileHashes(hashFilePath string) (map[string]string, error) {
+	if err := InitializeHashFile(hashFilePath); err != nil {
 		return nil, err
 	}
 
@@ -107,13 +114,13 @@ func LoadFileHashes() (map[string]string, error) {
 }
 
 // IsDuplicate checks if the file is a duplicate by comparing its hash with stored hashes.
-func IsDuplicate(filePath string) (bool, error) {
+func IsDuplicate(hashFilePath, filePath string) (bool, error) {
 	newHash, err := CalculateFileHash(filePath)
 	if err != nil {
 		return false, err
 	}
 
-	hashes, err := LoadFileHashes()
+	hashes, err := LoadFileHashes(hashFilePath)
 	if err != nil {
 		return false, err
 	}
